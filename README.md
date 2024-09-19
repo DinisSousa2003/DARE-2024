@@ -7,11 +7,11 @@ Set up a Python virtual environment in a new, empty directory:
 ```bash
 brew install python # or equivalent on your OS
 python3 -m venv venv
-source venv/bin/activate
-pip install pynacl
+source venv/bin/activate # or venv/Scripts/activate
+pip install -r requirements.txt
 ```
 
-Then save the file below as `acl.py` and run it using `python acl.py`. It should print out that it ran one test, and "OK".
+Then run it using `python acl_test_operations.py`. It should print out that it ran the tests, and "OK".
 
 ## How it works
 

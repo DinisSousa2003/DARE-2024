@@ -1,8 +1,8 @@
 import unittest
 from nacl.signing import SigningKey
-from acl_helpers import hex_hash
-from acl_operations import create_op, add_op, remove_op, message_op
-from acl_validation import interpret_ops
+from acl_helpers import hex_hash, verify_msg
+from acl_operations import create_op, add_op, remove_op
+from acl_validation import interpret_ops, precedes
 
 
 class TestAccessControlList(unittest.TestCase):
@@ -33,19 +33,6 @@ class TestAccessControlList(unittest.TestCase):
         self.assertEqual(
             {self.friendly_name[member] for member in members}, {"alice", "carol"}
         )
-
-    def test_message_1(self):
-        # Make some example ops
-        create = create_op(self.private["alice"])
-        add_b = add_op(self.private["alice"], self.public["bob"], [hex_hash(create)])
-        add_c = add_op(self.private["alice"], self.public["carol"], [hex_hash(create)])
-        message_1 = message_op(
-            self.private["alice"], self.public["carol"], "hello", [hex_hash(add_b)]
-        )
-
-        # Compute group membership and messages
-        members = interpret_ops({create, add_b, add_c, message_1})
-        self
 
     def test_bad_signature(self):
         create = create_op(self.private["alice"])
@@ -78,6 +65,34 @@ class TestAccessControlList(unittest.TestCase):
         with self.assertRaises(Exception):
             # This should raise an exception
             interpret_ops({create, add_b, add_c, rem_b})
+
+    def test_precedence(self):
+        # Make some example ops
+        create = create_op(self.private["alice"])
+        add_b = add_op(self.private["alice"], self.public["bob"], [hex_hash(create)])
+        add_c = add_op(self.private["alice"], self.public["carol"], [hex_hash(create)])
+        rem_b = remove_op(
+            self.private["alice"],
+            self.public["bob"],
+            [hex_hash(add_b), hex_hash(add_c)],
+        )
+
+        ops = {create, add_b, add_c, rem_b}
+        ops_by_hash = {hex_hash(op): verify_msg(op) for op in ops}
+
+        self.assertEqual(precedes(ops_by_hash, create, verify_msg(add_b)), True)
+        self.assertEqual(precedes(ops_by_hash, create, verify_msg(add_c)), True)
+
+        self.assertEqual(precedes(ops_by_hash, add_b, verify_msg(rem_b)), True)
+        self.assertEqual(precedes(ops_by_hash, add_c, verify_msg(rem_b)), True)
+        self.assertEqual(precedes(ops_by_hash, create, verify_msg(rem_b)), True)
+
+        self.assertEqual(precedes(ops_by_hash, rem_b, verify_msg(add_b)), False)
+        self.assertEqual(precedes(ops_by_hash, rem_b, verify_msg(add_c)), False)
+        self.assertEqual(precedes(ops_by_hash, rem_b, verify_msg(create)), False)
+
+        self.assertEqual(precedes(ops_by_hash, add_b, verify_msg(create)), False)
+        self.assertEqual(precedes(ops_by_hash, add_c, verify_msg(create)), False)
 
 
 if __name__ == "__main__":

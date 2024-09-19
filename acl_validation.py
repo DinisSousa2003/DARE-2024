@@ -2,20 +2,6 @@ from acl_helpers import transitive_succs, hex_hash, verify_msg
 from acl_operations import PERMITTED_OPERATORS
 
 
-def is_op_valid(hash, ops_by_hash):
-    """
-    Takes the hash of a node operation and sees if the actor of the operation was valid
-    """
-
-    current_op = ops_by_hash.get(hash)
-
-    if current_op["type"] in {"add", "remove", "message"}:
-
-        # DO A TOPOLOGICAL SORT
-
-        pass
-
-
 def validate_op_types(parsed_ops):
     if any(op["type"] not in PERMITTED_OPERATORS for op in parsed_ops):
         raise Exception("Every op must be either create, add, remove or message")
@@ -24,14 +10,6 @@ def validate_op_types(parsed_ops):
         raise Exception("Every add operation must have an added_key")
     if any("removed_key" not in op for op in parsed_ops if op["type"] == "remove"):
         raise Exception("Every remove operation must have a removed_key")
-    if any(
-        "receptor_key" not in op or "message" not in op
-        for op in parsed_ops
-        if op["type"] == "message"
-    ):
-        raise Exception(
-            "Every message operation must have a receptor_key and a message"
-        )
 
 
 def validate_hash_graph(ops_by_hash, parsed_ops):
@@ -55,6 +33,16 @@ def get_successors_per_op(ops_by_hash):
     return successors
 
 
+def get_creation_op(ops_by_hash):
+    create_ops = [
+        (hash, op) for hash, op in ops_by_hash.items() if op["type"] == "create"
+    ]
+    if len(create_ops) != 1:
+        raise Exception("There must be exactly one create operation")
+
+    return create_ops[0]
+
+
 def compute_members(ops_by_hash, successors):
     members = set()
     for hash, op in ops_by_hash.items():
@@ -68,16 +56,6 @@ def compute_members(ops_by_hash, successors):
                 members.add(added_key)
 
     return members
-
-
-def get_creation_op(ops_by_hash):
-    create_ops = [
-        (hash, op) for hash, op in ops_by_hash.items() if op["type"] == "create"
-    ]
-    if len(create_ops) != 1:
-        raise Exception("There must be exactly one create operation")
-
-    return create_ops[0]
 
 
 def interpret_ops(ops):
@@ -111,8 +89,20 @@ def interpret_ops(ops):
     # operation that is a transitive successor to the add operation.
     members = compute_members(ops_by_hash, successors)
 
-    for hash, op in ops_by_hash.items():
-        # Check if op is valid
-        is_op_valid(hash, ops_by_hash)
-
     return members
+
+
+def precedes(ops_by_hash, op1, op2):
+    """Checks whether op1 precedes op2
+
+    Args:
+        ops_by_hash (dict[string, dict]): operation hash to operation map
+        op1 (dict): operation 1
+        op2 (dict): operation 2
+
+    Returns:
+        bool: true if op1 precedes op2, false otherwise
+    """    
+    return hex_hash(op1) in op2.get("preds", []) or any(
+        [precedes(ops_by_hash, op1, ops_by_hash[dep]) for dep in op2.get("preds", [])]
+    )
