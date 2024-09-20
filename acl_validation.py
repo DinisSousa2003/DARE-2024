@@ -110,6 +110,17 @@ def precedes(ops_by_hash, op1, op2):
 
 
 def checkGraph(ops_by_hash, op, added, depth):
+    """_summary_
+
+    Args:
+        ops_by_hash (_type_): _description_
+        op (_type_): _description_
+        added (_type_): _description_
+        depth (_type_): _description_
+
+    Returns:
+        _type_: _description_
+    """
     if op in depth:
         return (added, depth)
     elif op["type"] == "create" and added == {} and depth == {}:
@@ -121,12 +132,47 @@ def checkGraph(ops_by_hash, op, added, depth):
         and all([dep in ops_by_hash.keys() for dep in deps])
     ):
         maxDepth = 0
-        #TODO
+        for dep in deps:
+            depOp = ops_by_hash[dep]
+            (added, depth) = checkGraph(ops_by_hash, depOp, added, depth)
+            
+            if added == None and depth == None:
+                return (None, None)
+            
+            maxDepth = max(maxDepth, depth[depOp])
+
+        pk = op["signed_by"]
+        possible_prevs = [] #TODO:how tf do I get this??
+        if not any((pk, prev) in added and precedes(ops_by_hash, prev, op) for prev in possible_prevs):
+            return (None, None)
+        
+        if op["type"] == "add":
+            added =  added.union({(op["added_key"], op)})
+        
+        depth[op] = maxDepth +1
+        return (added, depth)
     else:
-        return
+        return (None, None)
 
 
 def computeSeniority(ops):
+    """_summary_
+
+    Args:
+        ops (_type_): _description_
+
+    Returns:
+        _type_: _description_
+    """
     ops_by_hash = {hex_hash(op): verify_msg(op) for op in ops}
-    # heads = create_hash, create_op = get_creation_op(ops_by_hash)
+    #heads = ??
+    
     (added, depth) = ({}, {})
+    for head in heads:
+        (added, depth) = checkGraph(ops_by_hash, head, added, depth)
+        if added == None and depth == None:
+            return (None, None)
+
+    
+    ops_by_pk = {pk: a.get(pk, {}).union(op) for (pk, op) in added}
+    return {pk: min(ops, key=lambda op: (depth[op], hex_hash(op))) for (pk, ops) in ops_by_pk}
