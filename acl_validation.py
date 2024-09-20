@@ -13,13 +13,13 @@ def validate_op_types(parsed_ops):
 
 
 def validate_hash_graph(ops_by_hash, parsed_ops):
-    if any(len(op["preds"]) == 0 for op in parsed_ops if op["type"] != "create"):
+    if any(len(op["deps"]) == 0 for op in parsed_ops if op["type"] != "create"):
         raise Exception("Every non-create op must have at least one predecessor")
     if any(
         pred not in ops_by_hash
         for op in parsed_ops
         if op["type"] != "create"
-        for pred in op["preds"]
+        for pred in op["deps"]
     ):
         raise Exception("Every hash must resolve to another op in the set")
 
@@ -27,7 +27,7 @@ def validate_hash_graph(ops_by_hash, parsed_ops):
 def get_successors_per_op(ops_by_hash):
     successors = {}
     for hash, op in ops_by_hash.items():
-        for pred in op.get("preds", []):
+        for pred in op.get("deps", []):
             successors[pred] = successors.get(pred, set()) | {hash}
 
     return successors
@@ -93,7 +93,8 @@ def interpret_ops(ops):
 
 
 def precedes(ops_by_hash, op1, op2):
-    """Checks whether op1 precedes op2
+    """Checks whether op1 precedes op2.
+    Assumes op1 and op2 are valid and verified messages.
 
     Args:
         ops_by_hash (dict[string, dict]): operation hash to operation map
@@ -102,7 +103,30 @@ def precedes(ops_by_hash, op1, op2):
 
     Returns:
         bool: true if op1 precedes op2, false otherwise
-    """    
-    return hex_hash(op1) in op2.get("preds", []) or any(
-        [precedes(ops_by_hash, op1, ops_by_hash[dep]) for dep in op2.get("preds", [])]
+    """
+    return hex_hash(op1) in op2.get("deps", []) or any(
+        [precedes(ops_by_hash, op1, ops_by_hash[dep]) for dep in op2.get("deps", [])]
     )
+
+
+def checkGraph(ops_by_hash, op, added, depth):
+    if op in depth:
+        return (added, depth)
+    elif op["type"] == "create" and added == {} and depth == {}:
+        pk = op["signed_by"]
+        return ({(pk, op)}, {op: 0})
+    elif (
+        op["type"] in {"add", "remove"}
+        and (deps := op.get("deps", [])) != []
+        and all([dep in ops_by_hash.keys() for dep in deps])
+    ):
+        maxDepth = 0
+        #TODO
+    else:
+        return
+
+
+def computeSeniority(ops):
+    ops_by_hash = {hex_hash(op): verify_msg(op) for op in ops}
+    # heads = create_hash, create_op = get_creation_op(ops_by_hash)
+    (added, depth) = ({}, {})
