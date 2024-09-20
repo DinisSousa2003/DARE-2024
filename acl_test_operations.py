@@ -2,7 +2,7 @@ import unittest
 from nacl.signing import SigningKey
 from acl_helpers import hex_hash, verify_msg
 from acl_operations import create_op, add_op, remove_op
-from acl_validation import interpret_ops, precedes
+from acl_validation import interpret_ops, precedes, find_leaves
 
 
 class TestAccessControlList(unittest.TestCase):
@@ -80,20 +80,35 @@ class TestAccessControlList(unittest.TestCase):
         ops = {create, add_b, add_c, rem_b}
         ops_by_hash = {hex_hash(op): verify_msg(op) for op in ops}
 
-        self.assertEqual(precedes(ops_by_hash, create, verify_msg(add_b)), True)
-        self.assertEqual(precedes(ops_by_hash, create, verify_msg(add_c)), True)
+        self.assertEqual(precedes(ops_by_hash, hex_hash(create), hex_hash(add_b)), True)
+        self.assertEqual(precedes(ops_by_hash, hex_hash(create), hex_hash(add_c)), True)
 
-        self.assertEqual(precedes(ops_by_hash, add_b, verify_msg(rem_b)), True)
-        self.assertEqual(precedes(ops_by_hash, add_c, verify_msg(rem_b)), True)
-        self.assertEqual(precedes(ops_by_hash, create, verify_msg(rem_b)), True)
+        self.assertEqual(precedes(ops_by_hash, hex_hash(add_b), hex_hash(rem_b)), True)
+        self.assertEqual(precedes(ops_by_hash, hex_hash(add_c), hex_hash(rem_b)), True)
+        self.assertEqual(precedes(ops_by_hash, hex_hash(create), hex_hash(rem_b)), True)
 
-        self.assertEqual(precedes(ops_by_hash, rem_b, verify_msg(add_b)), False)
-        self.assertEqual(precedes(ops_by_hash, rem_b, verify_msg(add_c)), False)
-        self.assertEqual(precedes(ops_by_hash, rem_b, verify_msg(create)), False)
+        self.assertEqual(precedes(ops_by_hash, hex_hash(rem_b), hex_hash(add_b)), False)
+        self.assertEqual(precedes(ops_by_hash, hex_hash(rem_b), hex_hash(add_c)), False)
+        self.assertEqual(precedes(ops_by_hash, hex_hash(rem_b), hex_hash(create)), False)
 
-        self.assertEqual(precedes(ops_by_hash, add_b, verify_msg(create)), False)
-        self.assertEqual(precedes(ops_by_hash, add_c, verify_msg(create)), False)
+        self.assertEqual(precedes(ops_by_hash, hex_hash(add_b), hex_hash(create)), False)
+        self.assertEqual(precedes(ops_by_hash, hex_hash(add_c), hex_hash(create)), False)
 
+
+    def test_find_leaves(self):
+        create = create_op(self.private["alice"])
+        add_b = add_op(self.private["alice"], self.public["bob"], [hex_hash(create)])
+        add_c = add_op(self.private["alice"], self.public["carol"], [hex_hash(create)])
+        add_d = add_op(self.private["alice"], self.public["dave"], [hex_hash(add_b)])
+        rem_b = remove_op(
+            self.private["alice"],
+            self.public["bob"],
+            [hex_hash(add_b), hex_hash(add_c)],
+        )
+
+        ops = {create, add_b, add_c, add_d, rem_b}
+        self.assertCountEqual(find_leaves(ops), [hex_hash(add_d), hex_hash(rem_b)])
+        
 
 if __name__ == "__main__":
     unittest.main()

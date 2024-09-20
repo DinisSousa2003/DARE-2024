@@ -92,20 +92,21 @@ def interpret_ops(ops):
     return members
 
 
-def precedes(ops_by_hash, op1, op2):
+def precedes(ops_by_hash, hash1, hash2):
     """Checks whether op1 precedes op2.
     Assumes op1 and op2 are valid and verified messages.
 
     Args:
         ops_by_hash (dict[string, dict]): operation hash to operation map
-        op1 (dict): operation 1
-        op2 (dict): operation 2
+        hash1 (string): hash of operation 1
+        hash2 (string): hash of operation 2
 
     Returns:
         bool: true if op1 precedes op2, false otherwise
     """
-    return hex_hash(op1) in op2.get("deps", []) or any(
-        [precedes(ops_by_hash, op1, ops_by_hash[dep]) for dep in op2.get("deps", [])]
+    op2 = ops_by_hash[hash2]
+    return hash1 in op2.get("deps", []) or any(
+        [precedes(ops_by_hash, hash1, dep) for dep in op2.get("deps", [])]
     )
 
 
@@ -155,6 +156,18 @@ def checkGraph(ops_by_hash, op, added, depth):
         return (None, None)
 
 
+def find_leaves(ops):
+    in_edges = {hex_hash(op): verify_msg(op).get("deps", []) for op in ops}
+    
+    all_nodes = set(in_edges.keys()).union(*in_edges.values())
+    
+    out_nodes = set().union(*in_edges.values())
+    
+    leaf_nodes = all_nodes - out_nodes
+    
+    return list(leaf_nodes)
+
+
 def computeSeniority(ops):
     """_summary_
 
@@ -165,7 +178,7 @@ def computeSeniority(ops):
         _type_: _description_
     """
     ops_by_hash = {hex_hash(op): verify_msg(op) for op in ops}
-    #heads = ??
+    heads = find_leaves(ops)
     
     (added, depth) = ({}, {})
     for head in heads:
@@ -195,39 +208,47 @@ def authorityGraph(ops):
         represented as a set of edges.
         There is an edge from op1 to op2 in this graph if operation 
         op1 may affect whether op2 is authorized.
-
-        More precisely, there is an edge from op1 to op2 if:
-            1) op1 is an operation that adds the device with public
-            key pk (or op1 is the initial group creation by device pk), and op2
-            is a causally succeeding operation performed by device pk; or
-            2) op1 is an operation that removes the device with
-            public key pk, op2 is an operation performed by
-            device pk, and op1 either precedes op2 or the two operations are concurrent.
-
-    3) we also add a vertex (member, pk) for the public key 
-    pk of every device that was ever mentioned in an operation, 
-    and we add an edge to that vertex from each operation that may 
-    affect the permissions associated with pk
     """
     ops_by_hash = {hex_hash(op): verify_msg(op) for op in ops}
     authGraph = set()
-    for op2 in ops:
+    for hash2, op2 in ops_by_hash.items():
         pk = op2["signed_by"]
-        for op1 in ops:
+        for hash1, op1 in ops_by_hash.items():
+            if hash1 == hash2:
+                continue
             #1)
             if ((op1["type"] == "create" and op1["signed_by"] == pk
                 or op1["type"] == "add" and op1["added_key"] == pk)
-                and precedes(ops_by_hash, op1, op2)):
-                authGraph.add((op1, op2))
+                and precedes(ops_by_hash, hash1, hash2)):
+                authGraph.add((hash1, hash2))
             #2)
             if (op1["type"] == "remove" and op1["removed_key"] == pk
-                and not precedes(ops_by_hash, op1, op2)):
-                authGraph.add((op1, op2))
+                and not precedes(ops_by_hash, hash2, hash1)):
+                authGraph.add((hash1, hash2))
         #3)
         if (op2["type"] == "create"):
-            authGraph.add((op2, ("member", pk)))
+            authGraph.add((hash2, ("member", pk)))
         elif (op2["type"] == "add"):
-            authGraph.add((op2, ("member", op2["added_key"])))
+            authGraph.add((hash2, ("member", op2["added_key"])))
         elif (op2["type"] == "remove"):
-            authGraph.add((op2, ("member", op2["removed_key"])))        
+            authGraph.add((hash2, ("member", op2["removed_key"])))    
 
+    return authGraph
+
+def findCycles(authGraph, op, path):
+    """
+    Find all cycles of the authority graph
+
+    Args:
+        authGraph (set): the authority graph
+        op (hash): hash of the current operation
+        path (list): the current path
+    Returns:
+        cycles: a set of cycles in the authority graph
+    """
+    if op in path:
+        #return the cycle, from the first occurrence of op to path end
+        return path[path.index(op):]
+    else:
+        preds = {n for (n, c_op) in authGraph if c_op == op}
+        return {findCycles(authGraph, n, path + op) for n in preds}
