@@ -1,7 +1,7 @@
 
 import unittest
 from nacl.signing import SigningKey
-from acl_validation import authorityGraph, findCycles
+from acl_validation import authorityGraph, findCycles, getMemberNodes
 from acl_helpers import hex_hash, verify_msg
 from acl_operations import create_op, add_op, remove_op
 
@@ -43,6 +43,20 @@ class TestAccessControlList(unittest.TestCase):
         self.assertTrue((hex_hash(rem_b), hex_hash(add_c)) in authGraph)
         
         self.assertTrue(len(authGraph) == 11)
+
+
+        #Check if the authority graph has cycles
+        members = getMemberNodes(authGraph)
+
+        self.assertTrue(len(members) == 3)
+
+        cycles = []
+        for member in members:
+            cycle = findCycles(authGraph, member, [])
+            cycles.append(cycle)
+            print(member, cycle)
+
+        
 
             
     

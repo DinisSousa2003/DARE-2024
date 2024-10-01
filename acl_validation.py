@@ -235,7 +235,16 @@ def authorityGraph(ops):
 
     return authGraph
 
+def getMemberNodes(authGraph):
+    memberNodes = set()
+    for (_, n2) in authGraph:
+        if type(n2) is tuple:
+            memberNodes.add(n2)
+    return memberNodes
+
+
 def findCycles(authGraph, op, path):
+    #TODO: NOT COMPLETE/WORKING
     """
     Find all cycles of the authority graph
 
@@ -248,7 +257,11 @@ def findCycles(authGraph, op, path):
     """
     if op in path:
         #return the cycle, from the first occurrence of op to path end
-        return path[path.index(op):]
+        return op
     else:
+        returnVal = set()
         preds = {n for (n, c_op) in authGraph if c_op == op}
-        return {findCycles(authGraph, n, path + op) for n in preds}
+        path.append(op)
+        for n in preds:
+            returnVal.add(findCycles(authGraph, n, path))
+        return returnVal
