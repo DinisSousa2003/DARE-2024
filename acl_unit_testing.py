@@ -45,16 +45,50 @@ class TestAccessControlList(unittest.TestCase):
         self.assertTrue(len(authGraph) == 11)
 
 
+    def test_cycles(self):
+
+        authGraph = {("create", ("member", "alice")),
+                          ("create", "add_b"),
+                          ("create", "rem_b"),
+                          ("add_b", ("member", "bob")),
+                          ("add_b", "add_c"),
+                          ("add_c", ("member", "carol")),
+                          ("add_c", "rem_a"),
+                          ("rem_a", ("member", "alice")),
+                          ("rem_a", "rem_b"),
+                          ("rem_b", ("member", "bob")),
+                          ("rem_b", "add_c"),
+                          }
+
         #Check if the authority graph has cycles
         members = getMemberNodes(authGraph)
 
         self.assertTrue(len(members) == 3)
-
+        
         cycles = []
         for member in members:
             cycle = findCycles(authGraph, member, [])
             cycles.append(cycle)
-            print(member, cycle)
+            if member[1] == "alice":
+                #self.assertTrue(len(cycle) == 3)
+                print("alice", cycle, len(cycle))
+            elif member[1] == "bob":                
+                #self.assertTrue(len(cycle) == 3)
+                print("bob", cycle, len(cycle))
+            elif member[1] == "carol":
+                #self.assertTrue(len(cycle) == 3)
+                print("carol", cycle, len(cycle))
+
+    def test_cycles2(self):
+
+        authGraph = {("create", "add_b"),
+                     ("add_b", "rem_c"),
+                          ("rem_c", "create"),
+                          }
+        
+        cycle = findCycles(authGraph, "create", [])
+        print("testcycle2", cycle, len(cycle))
+            
 
         
 
