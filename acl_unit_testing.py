@@ -1,7 +1,7 @@
 
 import unittest
 from nacl.signing import SigningKey
-from acl_validation import authorityGraph, findCycles, getMemberNodes
+from acl_validation import authority_graph, find_cycles, get_member_nodes
 from acl_helpers import hex_hash, verify_msg
 from acl_operations import create_op, add_op, remove_op
 
@@ -27,27 +27,27 @@ class TestAccessControlList(unittest.TestCase):
         rem_a = remove_op(self.private["carol"], self.public["alice"], [hex_hash(add_c)])
 
         #Compute authority graph
-        authGraph = authorityGraph({create, add_b, rem_b, add_c, rem_a})
+        auth_graph = authority_graph({create, add_b, rem_b, add_c, rem_a})
 
         #Check if the authority graph is correct
-        self.assertTrue((hex_hash(create), ("member", self.public["alice"])) in authGraph)
-        self.assertTrue((hex_hash(create), hex_hash(add_b)) in authGraph)
-        self.assertTrue((hex_hash(create), hex_hash(rem_b)) in authGraph)
-        self.assertTrue((hex_hash(add_b), ("member", self.public["bob"])) in authGraph)
-        self.assertTrue((hex_hash(add_b), hex_hash(add_c)) in authGraph)
-        self.assertTrue((hex_hash(add_c), ("member", self.public["carol"])) in authGraph)
-        self.assertTrue((hex_hash(add_c), hex_hash(rem_a)) in authGraph)
-        self.assertTrue((hex_hash(rem_a), ("member", self.public["alice"])) in authGraph)
-        self.assertTrue((hex_hash(rem_a), hex_hash(rem_b)) in authGraph)
-        self.assertTrue((hex_hash(rem_b), ("member", self.public["bob"])) in authGraph)
-        self.assertTrue((hex_hash(rem_b), hex_hash(add_c)) in authGraph)
+        self.assertTrue((hex_hash(create), ("member", self.public["alice"])) in auth_graph)
+        self.assertTrue((hex_hash(create), hex_hash(add_b)) in auth_graph)
+        self.assertTrue((hex_hash(create), hex_hash(rem_b)) in auth_graph)
+        self.assertTrue((hex_hash(add_b), ("member", self.public["bob"])) in auth_graph)
+        self.assertTrue((hex_hash(add_b), hex_hash(add_c)) in auth_graph)
+        self.assertTrue((hex_hash(add_c), ("member", self.public["carol"])) in auth_graph)
+        self.assertTrue((hex_hash(add_c), hex_hash(rem_a)) in auth_graph)
+        self.assertTrue((hex_hash(rem_a), ("member", self.public["alice"])) in auth_graph)
+        self.assertTrue((hex_hash(rem_a), hex_hash(rem_b)) in auth_graph)
+        self.assertTrue((hex_hash(rem_b), ("member", self.public["bob"])) in auth_graph)
+        self.assertTrue((hex_hash(rem_b), hex_hash(add_c)) in auth_graph)
         
-        self.assertTrue(len(authGraph) == 11)
+        self.assertTrue(len(auth_graph) == 11)
 
 
     def test_cycles(self):
 
-        authGraph = {("create", ("member", "alice")),
+        auth_graph = {("create", ("member", "alice")),
                           ("create", "add_b"),
                           ("create", "rem_b"),
                           ("add_b", ("member", "bob")),
@@ -61,37 +61,16 @@ class TestAccessControlList(unittest.TestCase):
                           }
 
         #Check if the authority graph has cycles
-        members = getMemberNodes(authGraph)
+        members = get_member_nodes(auth_graph)
 
         self.assertTrue(len(members) == 3)
         
-        cycles = []
-        for member in members:
-            cycle = findCycles(authGraph, member, [])
-            cycles.append(cycle)
-            if member[1] == "alice":
-                #self.assertTrue(len(cycle) == 3)
-                print("alice", cycle, len(cycle))
-            elif member[1] == "bob":                
-                #self.assertTrue(len(cycle) == 3)
-                print("bob", cycle, len(cycle))
-            elif member[1] == "carol":
-                #self.assertTrue(len(cycle) == 3)
-                print("carol", cycle, len(cycle))
+        cycles = find_cycles(auth_graph, members)
 
-    def test_cycles2(self):
+        self.assertEquals(len(cycles), 1)
 
-        authGraph = {("create", "add_b"),
-                     ("add_b", "rem_c"),
-                          ("rem_c", "create"),
-                          }
-        
-        cycle = findCycles(authGraph, "create", [])
-        print("testcycle2", cycle, len(cycle))
+        self.assertCountEqual(cycles[0], ['add_c', 'rem_b', 'rem_a'])
             
-
-        
-
             
     
 

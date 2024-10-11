@@ -1,7 +1,6 @@
 from acl_helpers import transitive_succs, hex_hash, verify_msg
 from acl_operations import PERMITTED_OPERATORS
 
-
 def validate_op_types(parsed_ops):
     if any(op["type"] not in PERMITTED_OPERATORS for op in parsed_ops):
         raise Exception("Every op must be either create, add, remove or message")
@@ -110,7 +109,7 @@ def precedes(ops_by_hash, hash1, hash2):
     )
 
 
-def checkGraph(ops_by_hash, op, added, depth):
+def check_graph(ops_by_hash, op, added, depth):
     """_summary_
 
     Args:
@@ -135,7 +134,7 @@ def checkGraph(ops_by_hash, op, added, depth):
         maxDepth = 0
         for dep in deps:
             depOp = ops_by_hash[dep]
-            (added, depth) = checkGraph(ops_by_hash, depOp, added, depth)
+            (added, depth) = check_graph(ops_by_hash, depOp, added, depth)
             
             if added == None and depth == None:
                 return (None, None)
@@ -168,7 +167,7 @@ def find_leaves(ops):
     return list(leaf_nodes)
 
 
-def computeSeniority(ops):
+def compute_seniority(ops):
     """_summary_
 
     Args:
@@ -182,7 +181,7 @@ def computeSeniority(ops):
     
     (added, depth) = ({}, {})
     for head in heads:
-        (added, depth) = checkGraph(ops_by_hash, head, added, depth)
+        (added, depth) = check_graph(ops_by_hash, head, added, depth)
         if added == None and depth == None:
             return (None, None)
 
@@ -196,7 +195,7 @@ def subject(op):
     """
     return op["signed_by"]
 
-def authorityGraph(ops):
+def authority_graph(ops):
     """
     Returns the authority graph of a set of operations.
 
@@ -235,7 +234,7 @@ def authorityGraph(ops):
 
     return authGraph
 
-def getMemberNodes(authGraph):
+def get_member_nodes(authGraph):
     '''
     Given the authority graph, returns member nodes
     '''
@@ -247,25 +246,42 @@ def getMemberNodes(authGraph):
     return memberNodes
 
 
-def findCycles(authGraph, op, path):
-    #TODO: not working
-    """
-    Find all cycles of the authority graph
+def find_cycles(auth_graph, end_ops):
+    def dfs(op, path):
+        if op in path:
+            # Cycle detected: extract the cycle from the path
+            cycle_start = path.index(op)
+            return [path[cycle_start:]]  # Return the cycle as a list of lists
+        else:
+            cycles = []
+            path.append(op)
+            preds = {n for (n, c_op) in auth_graph if c_op == op}
+            for new_op in preds:
+                cycles += dfs(new_op, path.copy())
+            path.pop()
+            return cycles
 
-    Args:
-        authGraph (set): the authority graph
-        op (hash): hash of the current operation
-        path (list): the current path
-    Returns:
-        cycles (list): list of cycles in the authority graph
-    """
-    if op in path:
-        #return the cycle, from the first occurrence of op to path end
-        return path[path.index(op):]
+    all_cycles = []
+    # Start DFS from each node
+    for op in end_ops:
+        all_cycles += dfs(op, [])
 
-    cycles = []
-    preds = {n for (n, c_op) in authGraph if c_op == op}
-    path.append(op)
-    for n in preds:
-        cycles.extend(findCycles(authGraph, n, path))
-    return cycles
+    all_cycles = remove_repeated_cycles(all_cycles)
+    
+    return all_cycles
+
+def remove_repeated_cycles(cycles):
+    unique_cycles = set()
+
+    for cycle in cycles:
+        # Find the canonical form by rotating the cycle to start with the smallest element
+        min_idx = cycle.index(min(cycle))
+        #Has to be a tuple to add to a set
+        canonical_cycle = tuple(cycle[min_idx:] + cycle[:min_idx])
+        
+        # Add the canonical form to the set (automatically removes duplicates)
+        unique_cycles.add(canonical_cycle)
+    
+    # Convert the set of tuples back to list of lists
+    return [list(cycle) for cycle in unique_cycles]
+
