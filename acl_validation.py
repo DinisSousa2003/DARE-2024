@@ -377,6 +377,10 @@ def computeMembership(ops):
         cycles = find_cycles(auth_graph, member)
 
     #IMPLEMENT DROP
+    drop = set()
+    for cycle in cycles:
+        cycle_op = [ops_by_hash[x] for x in cycle]
+        drop.add(max(cycle_op, key= lambda x : seniority_dict.get(get_subject(x))))
 
     valid = set()
 

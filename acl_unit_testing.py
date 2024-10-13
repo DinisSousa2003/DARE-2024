@@ -1,7 +1,7 @@
 
 import unittest
 from nacl.signing import SigningKey
-from acl_validation import authority_graph, find_cycles, get_member_nodes, compute_validity
+from acl_validation import authority_graph, find_cycles, get_member_nodes, compute_validity, compute_members
 from acl_helpers import hex_hash, verify_msg
 from acl_operations import create_op, add_op, remove_op
 
@@ -108,6 +108,22 @@ class TestAccessControlList(unittest.TestCase):
 
         #The creation of the group, adding b and removing b should be valid, as well as member A
         self.assertEqual(len(valid), 4)
+
+    def test_compute_membership(self):
+        # Make some example ops
+        create = create_op(self.private["alice"])
+        add_b = add_op(self.private["alice"], self.public["bob"], [hex_hash(create)])
+        rem_b = remove_op(self.private["alice"], self.public["bob"], [hex_hash(add_b)])
+        add_c = add_op(self.private["bob"], self.public["carol"], [hex_hash(add_b)])
+        rem_a = remove_op(self.private["carol"], self.public["alice"], [hex_hash(add_c)])
+
+        ops = {create, add_b, rem_b, add_c, rem_a}
+
+        members = compute_members(ops)
+
+        self.assertIn(self.private["alice"], members)
+        self.assertNotIn(self.private["bob"], members)
+        self.assertNotIn(self.private["carol"], members)
 
 if __name__ == "__main__":
     unittest.main()
