@@ -189,7 +189,7 @@ def compute_seniority(ops):
     ops_by_pk = {pk: a.get(pk, {}).union(op) for (pk, op) in added}
     return {pk: min(ops, key=lambda op: (depth[op], hex_hash(op))) for (pk, ops) in ops_by_pk}
 
-def subject(op):
+def get_subject(op):
     """
     Returns the subject of an operation.
     """
@@ -209,7 +209,7 @@ def authority_graph(ops):
         op1 may affect whether op2 is authorized.
     """
     ops_by_hash = {hex_hash(op): verify_msg(op) for op in ops}
-    authGraph = set()
+    auth_graph = set()
     for hash2, op2 in ops_by_hash.items():
         pk = op2["signed_by"]
         for hash1, op1 in ops_by_hash.items():
@@ -219,28 +219,28 @@ def authority_graph(ops):
             if ((op1["type"] == "create" and op1["signed_by"] == pk
                 or op1["type"] == "add" and op1["added_key"] == pk)
                 and precedes(ops_by_hash, hash1, hash2)):
-                authGraph.add((hash1, hash2))
+                auth_graph.add((hash1, hash2))
             #2)
             if (op1["type"] == "remove" and op1["removed_key"] == pk
                 and not precedes(ops_by_hash, hash2, hash1)):
-                authGraph.add((hash1, hash2))
+                auth_graph.add((hash1, hash2))
         #3)
         if (op2["type"] == "create"):
-            authGraph.add((hash2, ("member", pk)))
+            auth_graph.add((hash2, ("member", pk)))
         elif (op2["type"] == "add"):
-            authGraph.add((hash2, ("member", op2["added_key"])))
+            auth_graph.add((hash2, ("member", op2["added_key"])))
         elif (op2["type"] == "remove"):
-            authGraph.add((hash2, ("member", op2["removed_key"])))    
+            auth_graph.add((hash2, ("member", op2["removed_key"])))    
 
-    return authGraph
+    return auth_graph
 
-def get_member_nodes(authGraph):
+def get_member_nodes(auth_graph):
     '''
     Given the authority graph, returns member nodes
     '''
 
     memberNodes = set()
-    for (_, n2) in authGraph:
+    for (_, n2) in auth_graph:
         if type(n2) is tuple:
             memberNodes.add(n2)
     return memberNodes
@@ -255,8 +255,8 @@ def find_cycles(auth_graph, end_ops):
         else:
             cycles = []
             path.append(op)
-            preds = {n for (n, c_op) in auth_graph if c_op == op}
-            for new_op in preds:
+            prevs = {n for (n, c_op) in auth_graph if c_op == op}
+            for new_op in prevs:
                 cycles += dfs(new_op, path.copy())
             path.pop()
             return cycles
@@ -276,7 +276,8 @@ def remove_repeated_cycles(cycles):
     for cycle in cycles:
         # Find the canonical form by rotating the cycle to start with the smallest element
         min_idx = cycle.index(min(cycle))
-        #Has to be a tuple to add to a set
+
+        #Has to be a tuple (immutable) to add to a set
         canonical_cycle = tuple(cycle[min_idx:] + cycle[:min_idx])
         
         # Add the canonical form to the set (automatically removes duplicates)
@@ -285,3 +286,70 @@ def remove_repeated_cycles(cycles):
     # Convert the set of tuples back to list of lists
     return [list(cycle) for cycle in unique_cycles]
 
+def compute_validity(ops_by_hash: dict, auth_graph: list, op, valid: set):
+    '''
+    Returns the set of valid operations.
+
+    Args:
+        ops_by_hash (dict): hash (key): op (val)
+        auth_graph (list): list of operations 
+        op: current op
+        valid (set): set of valid ops
+    Returns:
+        set of authorized operations
+    '''
+    #members = get_member_nodes(auth_graph)
+    if op in valid:
+        return valid
+    elif op["type"] == "create":
+        #may give error with member
+        #op not in members and
+        valid.add(op)
+        return valid
+    else:
+        prevs = {n for (n, c_op) in auth_graph if c_op == op}
+        for prev in prevs:
+            valid = compute_validity(ops_by_hash, auth_graph, prev, valid)
+        #get all valid previous nodes
+        valid_predecessors = {v for v in valid if precedes(ops_by_hash, v, op)}
+        if is_op_valid(ops_by_hash, valid_predecessors, op):
+            valid.add(op)
+        return valid
+        
+
+def is_op_valid(ops_by_hash, valid_predecessors, op):
+    '''
+    op to be valid iff there is at least one add or create operation 
+    in the set in that has not been overridden by a
+    subsequent remove operation: in other words, if the device that 
+    generated op has been added to the group and not yet
+    been removed again
+    '''
+
+    #TODO: TEST 
+    
+    subject = get_subject(op)
+    
+    for op_x in valid_predecessors:
+
+        #if it is not an add or a create keep going
+        if not ((op_x["type"] == "add" and op_x["added_key"] == subject) 
+            or (op_x["type"] == "create" and op_x["signed_key"] == subject)):
+            continue
+
+        #if it is, check if there is no remove after
+        add_valid = True
+        for op_y in valid_predecessors:
+            #get all removes
+            if (op_y["type"] == "remove" and op_y["remove_key"] == subject):
+                #if there exists one remove after the
+                if precedes(ops_by_hash, op_x, op_y):
+                    add_valid = False
+                    break
+
+        #If there was no remove after the add, the op is valid
+        if add_valid:
+            return True
+
+    #There was no valid add
+    return False

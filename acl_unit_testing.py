@@ -70,9 +70,6 @@ class TestAccessControlList(unittest.TestCase):
         self.assertEquals(len(cycles), 1)
 
         self.assertCountEqual(cycles[0], ['add_c', 'rem_b', 'rem_a'])
-            
-            
-    
 
 if __name__ == "__main__":
     unittest.main()
