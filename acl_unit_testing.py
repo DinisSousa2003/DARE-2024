@@ -83,6 +83,13 @@ class TestAccessControlList(unittest.TestCase):
         #Compute authority graph
         auth_graph = authority_graph(ops)
 
+        '''
+        for n in auth_graph:
+            print(n)
+
+        print("###############")
+        '''
+
         self.assertEqual(len(auth_graph), 8)
         
         ops_by_hash = {hex_hash(op): verify_msg(op) for op in ops}
@@ -94,7 +101,13 @@ class TestAccessControlList(unittest.TestCase):
         for member in members:
             valid.union(compute_validity(ops_by_hash, auth_graph, member, valid))
 
-        print(valid)
+        '''
+        for v in valid:
+            print(v)
+        '''
+
+        #The creation of the group, adding b and removing b should be valid, as well as member A
+        self.assertEqual(len(valid), 4)
 
 if __name__ == "__main__":
     unittest.main()

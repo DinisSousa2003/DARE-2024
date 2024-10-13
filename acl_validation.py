@@ -168,13 +168,13 @@ def find_leaves(ops):
 
 
 def compute_seniority(ops):
-    """_summary_
-
+    """
+    Compute seniority of members (pk)
     Args:
-        ops (_type_): _description_
+        ops (set): set of all operations
 
     Returns:
-        _type_: _description_
+        dict : pk (key) - seniority (value)
     """
     ops_by_hash = {hex_hash(op): verify_msg(op) for op in ops}
     heads = find_leaves(ops)
@@ -360,3 +360,26 @@ def is_op_valid(ops_by_hash, valid_predecessors, op):
     #There was no valid add
     return False
 
+
+def computeMembership(ops):
+    ops_by_hash = {hex_hash(op): verify_msg(op) for op in ops}
+
+    seniority_dict = compute_seniority(ops)
+
+    if (seniority_dict == (None, None)):
+        raise Exception("Graph is not correct")
+    
+    auth_graph = authority_graph(ops)
+    member_nodes = get_member_nodes(auth_graph)
+
+    for member in member_nodes:
+        cycles = find_cycles(auth_graph, member)
+
+    #IMPLEMENT DROP
+
+    valid = set()
+
+    for member in member_nodes:
+        valid.union(compute_validity(ops_by_hash, auth_graph, member, valid))
+
+    return {member[1] for member in member_nodes if member in valid}
