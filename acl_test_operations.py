@@ -2,7 +2,8 @@ import unittest
 from nacl.signing import SigningKey
 from acl_helpers import hex_hash, verify_msg
 from acl_operations import create_op, add_op, remove_op
-from acl_validation import interpret_ops, precedes, find_leaves
+from acl_validation import interpret_ops, precedes, find_leaves, compute_seniority
+from pprint import pprint
 
 
 class TestAccessControlList(unittest.TestCase):
@@ -16,7 +17,7 @@ class TestAccessControlList(unittest.TestCase):
     friendly_name = {
         public_key: name for name, public_key in public.items()
     }  # public key: name
-
+    
     def test_add_remove(self):
         # Make some example ops
         create = create_op(self.private["alice"])
@@ -109,6 +110,19 @@ class TestAccessControlList(unittest.TestCase):
         ops = {create, add_b, add_c, add_d, rem_b}
         self.assertCountEqual(find_leaves(ops), [hex_hash(add_d), hex_hash(rem_b)])
         
+    def test_compute_seniority(self):
+        create = create_op(self.private["alice"])
+        add_b = add_op(self.private["alice"], self.public["bob"], [hex_hash(create)])
+        add_c = add_op(self.private["alice"], self.public["carol"], [hex_hash(create)])
+        add_d = add_op(self.private["alice"], self.public["dave"], [hex_hash(add_b)])
+        rem_b = remove_op(
+            self.private["alice"],
+            self.public["bob"],
+            [hex_hash(add_b), hex_hash(add_c)],
+        )
+
+        ops = {create, add_b, add_c, add_d, rem_b}
+        pprint(compute_seniority(ops))
 
 if __name__ == "__main__":
     unittest.main()

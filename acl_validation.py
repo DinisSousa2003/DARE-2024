@@ -1,5 +1,6 @@
 from acl_helpers import transitive_succs, hex_hash, verify_msg
 from acl_operations import PERMITTED_OPERATORS
+from pprint import pprint
 
 def validate_op_types(parsed_ops):
     if any(op["type"] not in PERMITTED_OPERATORS for op in parsed_ops):
@@ -109,23 +110,14 @@ def precedes(ops_by_hash, hash1, hash2):
     )
 
 
-def check_graph(ops_by_hash, op, added, depth):
-    """_summary_
-
-    Args:
-        ops_by_hash (_type_): _description_
-        op (_type_): _description_
-        added (_type_): _description_
-        depth (_type_): _description_
-
-    Returns:
-        _type_: _description_
-    """
-    if op in depth:
+def check_graph(ops_by_hash, op_hash, added, depth):
+    op = ops_by_hash[op_hash]
+    
+    if op_hash in depth.keys():
         return (added, depth)
     elif op["type"] == "create" and added == {} and depth == {}:
         pk = op["signed_by"]
-        return ({(pk, op)}, {op: 0})
+        return ({(pk, op_hash)}, {op_hash: 0})
     elif (
         op["type"] in {"add", "remove"}
         and (deps := op.get("deps", [])) != []
@@ -134,22 +126,22 @@ def check_graph(ops_by_hash, op, added, depth):
         maxDepth = 0
         for dep in deps:
             depOp = ops_by_hash[dep]
-            (added, depth) = check_graph(ops_by_hash, depOp, added, depth)
+            (added, depth) = check_graph(ops_by_hash, dep, added, depth)
             
             if added == None and depth == None:
                 return (None, None)
             
-            maxDepth = max(maxDepth, depth[depOp])
+            maxDepth = max(maxDepth, depth[dep])
 
         pk = op["signed_by"]
-        possible_prevs = [] #TODO:how tf do I get this??
-        if not any((pk, prev) in added and precedes(ops_by_hash, prev, op) for prev in possible_prevs):
+        possible_prevs = [prev_op for (prev_pk, prev_op) in added if prev_pk == pk]
+        if not any(((pk, prev) in added and precedes(ops_by_hash, prev, op_hash)) for prev in possible_prevs):
             return (None, None)
         
         if op["type"] == "add":
-            added =  added.union({(op["added_key"], op)})
+            added =  added.union({(op["added_key"], op_hash)})
         
-        depth[op] = maxDepth +1
+        depth[op_hash] = maxDepth +1
         return (added, depth)
     else:
         return (None, None)
@@ -168,14 +160,7 @@ def find_leaves(ops):
 
 
 def compute_seniority(ops):
-    """_summary_
 
-    Args:
-        ops (_type_): _description_
-
-    Returns:
-        _type_: _description_
-    """
     ops_by_hash = {hex_hash(op): verify_msg(op) for op in ops}
     heads = find_leaves(ops)
     
@@ -186,8 +171,17 @@ def compute_seniority(ops):
             return (None, None)
 
     
-    ops_by_pk = {pk: a.get(pk, {}).union(op) for (pk, op) in added}
-    return {pk: min(ops, key=lambda op: (depth[op], hex_hash(op))) for (pk, ops) in ops_by_pk}
+    # Create ops_by_pk, where the key is the public key and the value is a set of operations.
+    ops_by_pk = {}
+    
+    for (pk, op) in added:
+        if pk not in ops_by_pk:
+            ops_by_pk[pk] = set()  # Initialize an empty set for this public key
+        ops_by_pk[pk].add(op)  # Add the operation to the set of operations for this public key
+
+    # Return the public key mapped to the operation with the minimum depth and hash
+    return {pk: min(ops, key=lambda op: (depth[op], op)) for pk, ops in ops_by_pk.items()}
+
 
 def get_subject(op):
     """
