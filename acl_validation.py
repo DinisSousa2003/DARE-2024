@@ -367,7 +367,7 @@ def is_op_valid(ops_by_hash, valid_predecessors, op):
     return False
 
 
-def computeMembership(ops):
+def compute_membership(ops):
     ops_by_hash = {hex_hash(op): verify_msg(op) for op in ops}
 
     seniority_dict = compute_seniority(ops)
@@ -378,14 +378,13 @@ def computeMembership(ops):
     auth_graph = authority_graph(ops)
     member_nodes = get_member_nodes(auth_graph)
 
-    for member in member_nodes:
-        cycles = find_cycles(auth_graph, member)
+    cycles = find_cycles(auth_graph, member_nodes)
 
-    #IMPLEMENT DROP
     drop = set()
     for cycle in cycles:
-        cycle_op = [ops_by_hash[x] for x in cycle]
-        drop.add(max(cycle_op, key= lambda x : seniority_dict.get(get_subject(x))))
+        drop.add(max(cycle, key= lambda x : seniority_dict.get(get_subject(ops_by_hash[x]))))
+
+    auth_graph = {(n1, n2) for (n1, n2) in auth_graph if (n1 not in drop) and (n2 not in drop)}
 
     valid = set()
 

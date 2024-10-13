@@ -1,7 +1,7 @@
 
 import unittest
 from nacl.signing import SigningKey
-from acl_validation import authority_graph, find_cycles, get_member_nodes, compute_validity, compute_members
+from acl_validation import authority_graph, find_cycles, get_member_nodes, compute_validity, compute_membership
 from acl_helpers import hex_hash, verify_msg
 from acl_operations import create_op, add_op, remove_op
 
@@ -43,6 +43,14 @@ class TestAccessControlList(unittest.TestCase):
         self.assertTrue((hex_hash(rem_b), hex_hash(add_c)) in auth_graph)
         
         self.assertTrue(len(auth_graph) == 11)
+
+        members = get_member_nodes(auth_graph)
+
+        self.assertTrue(len(members) == 3)
+        
+        cycles = find_cycles(auth_graph, members)
+
+        self.assertEqual(len(cycles), 1)
 
 
     def test_cycles(self):
@@ -119,11 +127,11 @@ class TestAccessControlList(unittest.TestCase):
 
         ops = {create, add_b, rem_b, add_c, rem_a}
 
-        members = compute_members(ops)
+        members = compute_membership(ops)
 
-        self.assertIn(self.private["alice"], members)
-        self.assertNotIn(self.private["bob"], members)
-        self.assertNotIn(self.private["carol"], members)
+        self.assertIn(self.public["alice"], members)
+        self.assertNotIn(self.public["bob"], members)
+        self.assertNotIn(self.public["carol"], members)
 
 if __name__ == "__main__":
     unittest.main()
