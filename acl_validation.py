@@ -187,7 +187,12 @@ def compute_seniority(ops):
         ops_by_pk[pk].add(op)  # Add the operation to the set of operations for this public key
 
     # Return the public key mapped to the operation with the minimum depth and hash
-    return {pk: min(ops, key=lambda op: (depth[op], op)) for pk, ops in ops_by_pk.items()}
+    return {
+        pk: (depth[op], op)  # Return a tuple (depth, hash) for the minimum op
+        for pk, ops in ops_by_pk.items() 
+        # Find the operation with the minimum (depth, hash) for each public key
+        for op in [min(ops, key=lambda op: (depth[op], op))]
+    }
 
 
 def get_subject(op):
