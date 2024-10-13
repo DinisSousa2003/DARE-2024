@@ -1,7 +1,7 @@
 
 import unittest
 from nacl.signing import SigningKey
-from acl_validation import authority_graph, find_cycles, get_member_nodes
+from acl_validation import authority_graph, find_cycles, get_member_nodes, compute_validity
 from acl_helpers import hex_hash, verify_msg
 from acl_operations import create_op, add_op, remove_op
 
@@ -67,9 +67,34 @@ class TestAccessControlList(unittest.TestCase):
         
         cycles = find_cycles(auth_graph, members)
 
-        self.assertEquals(len(cycles), 1)
+        self.assertEqual(len(cycles), 1)
 
         self.assertCountEqual(cycles[0], ['add_c', 'rem_b', 'rem_a'])
+
+    def test_validity(self):
+        # Make some example ops
+        create = create_op(self.private["alice"])
+        add_b = add_op(self.private["alice"], self.public["bob"], [hex_hash(create)])
+        rem_b = remove_op(self.private["alice"], self.public["bob"], [hex_hash(add_b)])
+        add_c = remove_op(self.private["bob"], self.public["carol"], [hex_hash(rem_b)])
+
+        ops = {create, add_b, rem_b, add_c}
+
+        #Compute authority graph
+        auth_graph = authority_graph(ops)
+
+        self.assertEqual(len(auth_graph), 8)
+        
+        ops_by_hash = {hex_hash(op): verify_msg(op) for op in ops}
+
+        members = get_member_nodes(auth_graph)
+
+        valid = set()
+
+        for member in members:
+            valid.union(compute_validity(ops_by_hash, auth_graph, member, valid))
+
+        print(valid)
 
 if __name__ == "__main__":
     unittest.main()

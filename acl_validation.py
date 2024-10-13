@@ -286,34 +286,38 @@ def remove_repeated_cycles(cycles):
     # Convert the set of tuples back to list of lists
     return [list(cycle) for cycle in unique_cycles]
 
-def compute_validity(ops_by_hash: dict, auth_graph: list, op, valid: set):
+def compute_validity(ops_by_hash: dict, auth_graph: list, op_hash, valid: set):
     '''
     Returns the set of valid operations.
 
     Args:
         ops_by_hash (dict): hash (key): op (val)
         auth_graph (list): list of operations 
-        op: current op
+        op: hash of current op
         valid (set): set of valid ops
     Returns:
         set of authorized operations
     '''
-    #members = get_member_nodes(auth_graph)
-    if op in valid:
-        return valid
-    elif op["type"] == "create":
-        #may give error with member
-        #op not in members and
-        valid.add(op)
+
+    if type(op_hash) is tuple:
+        op = op_hash
+    else:
+        op = ops_by_hash[op_hash]
+        if (op["type"] == "create"):
+            valid.add(op_hash)
+            return valid
+
+    if op_hash in valid:
         return valid
     else:
-        prevs = {n for (n, c_op) in auth_graph if c_op == op}
-        for prev in prevs:
+        hash_prevs = {n for (n, c_op) in auth_graph if c_op == op_hash}
+        for prev in hash_prevs:
             valid = compute_validity(ops_by_hash, auth_graph, prev, valid)
         #get all valid previous nodes
-        valid_predecessors = {v for v in valid if precedes(ops_by_hash, v, op)}
+        valid_predecessors = {n for n in hash_prevs if n in valid}
+        #if precedes(ops_by_hash, v, op_hash)
         if is_op_valid(ops_by_hash, valid_predecessors, op):
-            valid.add(op)
+            valid.add(op_hash)
         return valid
         
 
@@ -326,24 +330,26 @@ def is_op_valid(ops_by_hash, valid_predecessors, op):
     been removed again
     '''
 
-    #TODO: TEST 
+    if (type(op) is tuple):
+        subject = op[1]
+    else:
+        subject = get_subject(op)
     
-    subject = get_subject(op)
-    
-    for op_x in valid_predecessors:
-
+    for op_x_hash in valid_predecessors:
+        op_x = ops_by_hash[op_x_hash]
         #if it is not an add or a create keep going
         if not ((op_x["type"] == "add" and op_x["added_key"] == subject) 
-            or (op_x["type"] == "create" and op_x["signed_key"] == subject)):
+            or (op_x["type"] == "create" and op_x["signed_by"] == subject)):
             continue
 
         #if it is, check if there is no remove after
         add_valid = True
-        for op_y in valid_predecessors:
+        for op_y_hash in valid_predecessors:
+            op_y = ops_by_hash[op_y_hash]
             #get all removes
-            if (op_y["type"] == "remove" and op_y["remove_key"] == subject):
+            if (op_y["type"] == "remove" and op_y["removed_key"] == subject):
                 #if there exists one remove after the
-                if precedes(ops_by_hash, op_x, op_y):
+                if precedes(ops_by_hash, op_x_hash, op_y_hash):
                     add_valid = False
                     break
 
@@ -353,3 +359,4 @@ def is_op_valid(ops_by_hash, valid_predecessors, op):
 
     #There was no valid add
     return False
+
