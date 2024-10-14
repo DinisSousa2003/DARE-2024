@@ -200,5 +200,33 @@ class TestAccessControlList(unittest.TestCase):
         self.assertNotIn(self.public["bob"], members)
         self.assertNotIn(self.public["carol"], members)
 
+    def test_compute_membership2(self):
+        # Make some example ops
+        create = create_op(self.private["alice"])
+        add_b = add_op(self.private["alice"], self.public["bob"], [hex_hash(create)])
+        add_c = add_op(self.private["bob"], self.public["carol"], [hex_hash(add_b)])
+
+        ops = {create, add_b, add_c}
+
+        members = compute_membership(ops)
+
+        self.assertIn(self.public["alice"], members)
+        self.assertIn(self.public["bob"], members)
+        self.assertIn(self.public["carol"], members)
+
+    def test_compute_membership3(self):
+        # Make some example ops
+        create = create_op(self.private["alice"])
+        add_b = add_op(self.private["alice"], self.public["bob"], [hex_hash(create)])
+        add_c = add_op(self.private["alice"], self.public["carol"], [hex_hash(create)])
+
+        ops = {create, add_b, add_c}
+
+        members = compute_membership(ops)
+
+        self.assertIn(self.public["alice"], members)
+        self.assertIn(self.public["bob"], members)
+        self.assertIn(self.public["carol"], members)
+
 if __name__ == "__main__":
     unittest.main()
