@@ -46,7 +46,6 @@ class TestAccessControlList(unittest.TestCase):
         self.assertEqual(precedes(ops_by_hash, hex_hash(add_b), hex_hash(create)), False)
         self.assertEqual(precedes(ops_by_hash, hex_hash(add_c), hex_hash(create)), False)
 
-
     def test_find_leaves(self):
         create = create_op(self.private["alice"])
         add_b = add_op(self.private["alice"], self.public["bob"], [hex_hash(create)])
@@ -73,6 +72,18 @@ class TestAccessControlList(unittest.TestCase):
         )
 
         ops = {create, add_b, add_c, add_d, rem_b}
+        
+        seniority = compute_seniority(ops)
+        self.assertDictEqual(
+            seniority,
+            {
+                self.public["alice"]: (0, hex_hash(create)),
+                self.public["bob"]: (1, hex_hash(add_b)),
+                self.public["carol"]: (1, hex_hash(add_c)),
+                self.public["dave"]: (2, hex_hash(add_d)),
+            }
+        )
+        
         #pprint(compute_seniority(ops))
 
     def test_authorityGraph(self):
@@ -108,7 +119,6 @@ class TestAccessControlList(unittest.TestCase):
         cycles = find_cycles(auth_graph, members)
 
         self.assertEqual(len(cycles), 1)
-
 
     def test_cycles(self):
 
