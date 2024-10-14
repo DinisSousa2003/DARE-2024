@@ -2,7 +2,7 @@ from acl_helpers import transitive_succs, hex_hash, verify_msg
 from acl_operations import PERMITTED_OPERATORS
 from pprint import pprint
 
-def precedes(ops_by_hash, hash1, hash2):
+def precedes(ops_by_hash: dict[str, dict], hash1: str, hash2: str) -> bool:
     """Checks whether op1 precedes op2.
     Assumes op1 and op2 are valid and verified messages.
 
@@ -20,7 +20,7 @@ def precedes(ops_by_hash, hash1, hash2):
     )
 
 
-def check_graph(ops_by_hash, op_hash, added, depth):
+def check_graph(ops_by_hash: dict[str, dict], op_hash: str, added: set, depth: dict[str, int]) -> tuple:
     op = ops_by_hash[op_hash]
     
     if op_hash in depth.keys():
@@ -57,7 +57,7 @@ def check_graph(ops_by_hash, op_hash, added, depth):
         return (None, None)
 
 
-def find_leaves(ops):
+def find_leaves(ops: set) -> list:
     in_edges = {hex_hash(op): verify_msg(op).get("deps", []) for op in ops}
     
     all_nodes = set(in_edges.keys()).union(*in_edges.values())
@@ -69,7 +69,7 @@ def find_leaves(ops):
     return list(leaf_nodes)
 
 
-def compute_seniority(ops):
+def compute_seniority(ops: set) -> dict[str, tuple[int, str]]:
     """
     Compute seniority of members (pk)
     Args:
@@ -105,13 +105,13 @@ def compute_seniority(ops):
     }
 
 
-def get_subject(op):
+def get_subject(op: dict) -> str:
     """
     Returns the subject of an operation.
     """
     return op["signed_by"]
 
-def authority_graph(ops):
+def authority_graph(ops: set) -> list[tuple]:
     """
     Returns the authority graph of a set of operations.
 
@@ -150,7 +150,7 @@ def authority_graph(ops):
 
     return auth_graph
 
-def get_member_nodes(auth_graph):
+def get_member_nodes(auth_graph: list[tuple]) -> list[tuple]:
     '''
     Given the authority graph, returns member nodes
     '''
@@ -162,8 +162,8 @@ def get_member_nodes(auth_graph):
     return memberNodes
 
 
-def find_cycles(auth_graph, end_ops):
-    def dfs(op, path):
+def find_cycles(auth_graph: list[tuple], end_ops: list[tuple]) -> list[list]:
+    def dfs(op, path: list) -> list[list]:
         if op in path:
             # Cycle detected: extract the cycle from the path
             cycle_start = path.index(op)
@@ -186,7 +186,7 @@ def find_cycles(auth_graph, end_ops):
     
     return all_cycles
 
-def remove_repeated_cycles(cycles):
+def remove_repeated_cycles(cycles: list[list]) -> list[list]:
     unique_cycles = set()
 
     for cycle in cycles:
@@ -202,7 +202,7 @@ def remove_repeated_cycles(cycles):
     # Convert the set of tuples back to list of lists
     return [list(cycle) for cycle in unique_cycles]
 
-def compute_validity(ops_by_hash: dict, auth_graph: list, op_hash, valid: set):
+def compute_validity(ops_by_hash: dict[str, dict], auth_graph: list, op_hash, valid: set) -> set:
     '''
     Returns the set of valid operations.
 
@@ -237,7 +237,7 @@ def compute_validity(ops_by_hash: dict, auth_graph: list, op_hash, valid: set):
         return valid
         
 
-def is_op_valid(ops_by_hash, valid_predecessors, op):
+def is_op_valid(ops_by_hash: dict[str, dict], valid_predecessors: set[str], op) -> bool:
     '''
     op to be valid iff there is at least one add or create operation 
     in the set in that has not been overridden by a
@@ -277,7 +277,7 @@ def is_op_valid(ops_by_hash, valid_predecessors, op):
     return False
 
 
-def compute_membership(ops):
+def compute_membership(ops: set[dict]) -> set:
     ops_by_hash = {hex_hash(op): verify_msg(op) for op in ops}
 
     seniority_dict = compute_seniority(ops)
