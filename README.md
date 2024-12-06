@@ -1,38 +1,75 @@
 # Decentralised access control project
 
-## Set-up
+## DARE 2024 - Final Project
+
+### Made by Dinis Sousa and Gustavo Costa
+
+### Motivation
+
+This project is an implementation of the algorithm presented in Martin Kleppmann's "Recovering from key compromise in decentralised access control systems".
+
+### Set-up
 
 Set up a Python virtual environment in a new, empty directory:
 
 ```bash
-brew install python # or equivalent on your OS
 python3 -m venv venv
 source venv/bin/activate # or venv/Scripts/activate
 pip install -r requirements.txt
 ```
 
-Then run it using `python acl_test_operations.py`. It should print out that it ran the tests, and "OK".
+### Structure
 
-## How it works
+The repository consists of the following key files:
 
-The code uses the [Ed25519](https://en.wikipedia.org/wiki/EdDSA) algorithm from the [PyNaCl](https://pynacl.readthedocs.io/en/latest/signing/) package for digital signatures, the [SHA-256](https://en.wikipedia.org/wiki/SHA-2) algorithm from the Python standard library as hash function, and the [unittest](https://docs.python.org/3/library/unittest.html) module from the Python standard library for test cases.
+`acl_operations.py`: Defines the operations for group management:
+- `create_op`: Creates a new group.
+- `add_op`: Adds a new member to the group.
+- `remove_op`: Removes an existing member from the group. All operations are signed and include dependencies to ensure causal consistency.
 
-The `create_op()`, `add_op()`, and `remove_op()` functions generate signed operations to create a group, add a member to a group, and remove a member from a group respectively. These operations are organised into a hash graph as described in the lecture. See `TestAccessControlList.test_add_remove()` at the end of the file for an example of how to use these functions.
+`acl_test_operations.py`: Contains unit tests to validate the access control implementation. It:
+- Tests scenarios like adding/removing members and checking operation precedence.
+- Includes methods to simulate and validate the system's behavior under various conditions, such as conflicting operations.
 
-The `interpret_ops()` function takes a set of these access control operations and determines the set of public keys that are currently group members: that is, those keys that have been added, and not subsequently been removed again (the group creator is implicitly added). The function first checks all the signatures, and then checks that the hash graph is well-formed, raising an exception it if not.
+`acl_validation.py`: Implements algorithms to validate and manage operations:
+- `compute_seniority`: Assigns seniority based on the operation graph.
+- `authority_graph`: Builds a graph to track the influence of operations.
+- `compute_validity`: Determines valid operations based on graph analysis.
 
-The algorithm in `interpret_ops()` is currently a very simple one, in which only the group creator is allowed to add and remove group members. This avoids the problems discussed in the lecture, where two group members concurrently remove each other. But it's also a very restrictive model. Your task is to make the algorithm more flexible or powerful; how exactly you do this is left up to you.
+`acl_helpers.py`: Provides utility functions:
+- Cryptographic hashing (`hex_hash`) and message signing/verification (`sign_msg`, `verify_msg`).
+- Helpers for transitive closure in operation graphs.
 
-## What to do
+### What is the problem
 
-Some suggestions (you don't have to do these in order, and feel free to do other things if you want):
+In decentralized systems like secure group messaging or collaboration tools, users can concurrently modify access permissions. This creates challenges, especially when devices or credentials are compromised. For example:
 
-1. Explore the code and how it works by writing some more test cases. Include some tests of failure cases, e.g. an operation with an invalid signature, or an operation signed by an unauthorised key. You can use [`assertRaises()`](https://docs.python.org/3/library/unittest.html#unittest.TestCase.assertRaises) to check that a test case raises an expected exception.
-2. Integrate a notion of application messages into the algorithm. For example, you could make a chat room that only current members are allowed to post to. If a user is removed, any messages they posted while they were a member remain valid, but you should ignore any messages they post after they are removed or concurrently with their removal. You can do this by signing application messages and making them a part of the hash graph, just like access control operations.
-3. Change the access control algorithm to use the Matrix approach instead of the currently implemented one. That is, every user has a power level, a user is allowed to add other users at a power level less than or equal to their own, and a user is allowed to remove other users with a power level strictly less than their own. The group creator starts with a fixed power level, e.g. 100. What should happen if the same user is added multiple times with different power levels?
-4. Change the access control algorithm to use another conflict resolution approach, such as the seniority-based solution outlined in the lecture.
-5. Instead of hand-writing test cases, you can also try property-based testing, which generates lots of random examples and checks that they produce the expected output. You could use the [Hypothesis library](https://hypothesis.readthedocs.io/en/latest/) for this.
-6. Implement a form of permission delegation: for example, you could have one group that represents a team of collaborators, and another group that represents the access control or a particular document or chat room. Instead of giving individual users access to the document or room, you could delegate access to the team, so that any member of the team can access the document/room, and the team membership can be managed separately. With this, you could even have a "team" representing all the devices belonging to one particular user; then a user could authorise and revoke devices without having to update the permissions on every document they have access to.
-7. A problem with the seniority-based access control algorithm is that a compromised key could be used long after it has been removed (even years later) to cause problems. Design an approach that would allow a removed key to become useless after some amount of time has elapsed.
+    An adversary using stolen keys can manipulate membership.
+    Concurrent removal of users may lead to inconsistencies in group membership.
 
-Whatever you do, make sure that `interpret_ops()` always produces the same result regardless of the order in which it iterates over the set of operations. This is important to ensure convergence, i.e. that any two devices come to the same conclusion of who the group members are, regardless of the order in which they received the operations. Python randomises the iteration order of sets every time you start the Python process, so if you have a test that sometimes passes and sometimes fails, it could well be that you're accidentally relying on iteration order.
+The paper introduces an algorithm that:
+
+    Ensures legitimate users can reliably revoke compromised devices.
+    Resolves conflicts in decentralized systems without relying on a central authority.
+
+### Solution 
+
+The proposed solution addresses the challenge of recovering from key compromise and resolving conflicts in decentralized access control systems. Key elements of the solution include:
+
+**Conflict Resolution with Seniority Ranking:**
+    Devices and their operations are assigned a seniority based on the order of their (first) inclusion in the group.
+    When two devices try to remove each other (or perform conflicting operations), the conflict is resolved in favor of the more senior device.
+    This deterministic approach ensures consistency across all devices.
+
+**Hash-based Directed Acyclic Graph (DAG):**
+    Operations (e.g., add/remove members) are encoded in a cryptographically secure hash-DAG.
+    The DAG captures the causal relationships between operations, enabling detection of concurrent and conflicting changes.
+
+**Revocation Handling:**
+    Compromised devices can be reliably removed, and any unauthorized operations performed by them (e.g., adding fake members) are automatically invalidated during conflict resolution.
+
+**Decentralized Convergence:**
+    The algorithm ensures that all devices converge to the same group membership, regardless of the order in which they receive operations, leveraging Conflict-free Replicated Data Type (CRDT) principles.
+
+**Security Guarantees:**
+    Even if adversaries exploit stolen keys to perform malicious actions, the system ensures that their actions are reversible and do not impact legitimate users, given that there is a more senior legitimate user than any of the stolen users keys.
